@@ -89,6 +89,9 @@ func (o *options) Run(cmd *cobra.Command, _ []string) error {
 		if len(o.rulePatterns) == 0 {
 			return fmt.Errorf("required flag --rule-pattern not set for global rule type '%s'", tuf.GlobalRuleBlockForcePushesType)
 		}
+		if o.threshold != 1 {
+			return fmt.Errorf("a threshold is not allowed to be set for a global rule type '%s'", tuf.GlobalRuleBlockForcePushesType)
+		}
 
 		return repo.AddGlobalRuleBlockForcePushes(cmd.Context(), signer, o.ruleName, o.rulePatterns, true, opts...)
 
