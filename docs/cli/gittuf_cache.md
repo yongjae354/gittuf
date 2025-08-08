@@ -2,6 +2,10 @@
 
 Manage gittuf's caching functionality
 
+### Synopsis
+
+The 'cache' command group contains subcommands to manage gittuf's local persistent cache. This cache helps improve performance by storing metadata locally. The cache is local-only and is not synchronized with remote repositories.
+
 ### Options
 
 ```
@@ -21,5 +25,6 @@ Manage gittuf's caching functionality
 ### SEE ALSO
 
 * [gittuf](gittuf.md)	 - A security layer for Git repositories, powered by TUF
+* [gittuf cache delete](gittuf_cache_delete.md)	 - Delete the local persistent cache
 * [gittuf cache init](gittuf_cache_init.md)	 - Initialize persistent cache
 
