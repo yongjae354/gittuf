@@ -122,6 +122,11 @@ func TestGetGitHubPullRequestApprovalAttestation(t *testing.T) {
 		err = attestations.SetGitHubPullRequestApprovalAttestation(repo, featureZeroZero, baseURL, 1, appName, testAnotherRef, testID, testID)
 		assert.NotNil(t, err)
 		assert.ErrorIs(t, err, github.ErrInvalidPullRequestApprovalAttestation)
+
+		// Confirm the state of attestations
+		mainAuthApp, err := attestations.GetGitHubPullRequestApprovalAttestationFor(repo, appName, testRef, testID, testID)
+		assert.Nil(t, err)
+		assert.Equal(t, mainZeroZero, mainAuthApp)
 	})
 
 	t.Run("same review ID, same index path", func(t *testing.T) {
@@ -143,6 +148,15 @@ func TestGetGitHubPullRequestApprovalAttestation(t *testing.T) {
 		// This should succeed because the same review ID can be observed by more than one app
 		err = attestations.SetGitHubPullRequestApprovalAttestation(repo, mainZeroZero, baseURL, 1, anotherAppName, testRef, testID, testID)
 		assert.Nil(t, err)
+
+		// Confirm the state of attestations
+		mainAuthApp, err := attestations.GetGitHubPullRequestApprovalAttestationFor(repo, appName, testRef, testID, testID)
+		assert.Nil(t, err)
+		assert.Equal(t, mainZeroZero, mainAuthApp)
+
+		mainAuthAnother, err := attestations.GetGitHubPullRequestApprovalAttestationFor(repo, anotherAppName, testRef, testID, testID)
+		assert.Nil(t, err)
+		assert.Equal(t, mainZeroZero, mainAuthAnother)
 	})
 }
 
