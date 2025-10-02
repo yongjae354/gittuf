@@ -27,6 +27,7 @@ type SignatureVerifier struct {
 	repository         *gitinterface.Repository
 	name               string
 	principals         []tuf.Principal
+	teams              []tuf.Team
 	threshold          int
 	verifyExhaustively bool // verifyExhaustively checks all possible signatures and returns all matched principals, even if threshold is already met
 }

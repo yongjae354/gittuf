@@ -337,6 +337,12 @@ func (d *Delegation) GetPrincipalIDs() *set.Set[string] {
 	return d.KeyIDs
 }
 
+// GetTeamIDs returns the identifiers of the teams that are listed as
+// trusted by the rule. Not supported in v01.
+func (d *Delegation) GetTeamIDs() *set.Set[string] {
+	return set.NewSet[string]()
+}
+
 // GetThreshold returns the threshold of principals that must approve to meet
 // the rule.
 func (d *Delegation) GetThreshold() int {

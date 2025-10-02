@@ -296,6 +296,11 @@ type Rule interface {
 	// GetPrincipalIDs returns the identifiers of the principals that are listed
 	// as trusted by the rule.
 	GetPrincipalIDs() *set.Set[string]
+
+	// GetTeamIDs returns the identifiers of the teams that are listed
+	// as trusted by the rule.
+	GetTeamIDs() *set.Set[string]
+
 	// GetThreshold returns the threshold of principals that must approve to
 	// meet the rule.
 	GetThreshold() int
