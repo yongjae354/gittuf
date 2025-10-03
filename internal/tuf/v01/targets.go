@@ -237,6 +237,11 @@ func (t *TargetsMetadata) RemoveTeam(_ string) error {
 	return tuf.ErrMetadataVersionDoesNotSupportTeams
 }
 
+// UpdateTeam is not supported in v01 metadata.
+func (t *TargetsMetadata) UpdateTeam(_ string, _ []tuf.Principal, _ int) error {
+	return tuf.ErrMetadataVersionDoesNotSupportTeams
+}
+
 // AddPrincipal adds a principal to the metadata.
 //
 // TODO: this isn't associated with a specific rule; with the removal of
