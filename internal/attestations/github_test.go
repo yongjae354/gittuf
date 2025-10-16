@@ -25,30 +25,47 @@ func TestSetGitHubPullRequestApprovalAttestation(t *testing.T) {
 	baseHost := "github.com"
 	appName := "github"
 
-	approvers := []string{"jane.doe@example.com"}
+	t.Run("normal case", func(t *testing.T) {
+		approvers := []string{"jane.doe@example.com"}
 
-	mainZeroZero := createGitHubPullRequestApprovalAttestationEnvelope(t, testRef, testID, testID, approvers)
-	featureZeroZero := createGitHubPullRequestApprovalAttestationEnvelope(t, testAnotherRef, testID, testID, approvers)
+		mainZeroZero := createGitHubPullRequestApprovalAttestationEnvelope(t, testRef, testID, testID, approvers)
+		featureZeroZero := createGitHubPullRequestApprovalAttestationEnvelope(t, testAnotherRef, testID, testID, approvers)
 
-	tmpDir := t.TempDir()
-	repo := gitinterface.CreateTestGitRepository(t, tmpDir, false)
+		tmpDir := t.TempDir()
+		repo := gitinterface.CreateTestGitRepository(t, tmpDir, false)
 
-	attestations := &Attestations{}
+		attestations := &Attestations{}
 
-	// Add auth for first branch
-	err := attestations.SetGitHubPullRequestApprovalAttestation(repo, mainZeroZero, baseURL, 1, appName, testRef, testID, testID)
-	assert.Nil(t, err)
-	assert.Contains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
-	assert.NotContains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testAnotherRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
-	assert.Equal(t, GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), attestations.codeReviewApprovalIndex[fmt.Sprintf("%s::%d", baseHost, 1)])
+		// Add auth for first branch
+		err := attestations.SetGitHubPullRequestApprovalAttestation(repo, mainZeroZero, baseURL, 1, appName, testRef, testID, testID)
+		assert.Nil(t, err)
+		assert.Contains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
+		assert.NotContains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testAnotherRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
+		assert.Equal(t, GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), attestations.codeReviewApprovalIndex[fmt.Sprintf("%s::%d", baseHost, 1)])
 
-	// Add auth for the other branch
-	err = attestations.SetGitHubPullRequestApprovalAttestation(repo, featureZeroZero, baseURL, 2, appName, testAnotherRef, testID, testID)
-	assert.Nil(t, err)
-	assert.Contains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
-	assert.Contains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testAnotherRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
-	assert.Equal(t, GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), attestations.codeReviewApprovalIndex[fmt.Sprintf("%s::%d", baseHost, 1)])
-	assert.Equal(t, GitHubPullRequestApprovalAttestationPath(testAnotherRef, testID, testID), attestations.codeReviewApprovalIndex[fmt.Sprintf("%s::%d", baseHost, 2)])
+		// Add auth for the other branch
+		err = attestations.SetGitHubPullRequestApprovalAttestation(repo, featureZeroZero, baseURL, 2, appName, testAnotherRef, testID, testID)
+		assert.Nil(t, err)
+		assert.Contains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
+		assert.Contains(t, attestations.codeReviewApprovalAttestations, path.Join(GitHubPullRequestApprovalAttestationPath(testAnotherRef, testID, testID), base64.URLEncoding.EncodeToString([]byte(appName))))
+		assert.Equal(t, GitHubPullRequestApprovalAttestationPath(testRef, testID, testID), attestations.codeReviewApprovalIndex[fmt.Sprintf("%s::%d", baseHost, 1)])
+		assert.Equal(t, GitHubPullRequestApprovalAttestationPath(testAnotherRef, testID, testID), attestations.codeReviewApprovalIndex[fmt.Sprintf("%s::%d", baseHost, 2)])
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		// Create an invalid envelope (empty envelope)
+		invalidEnv := &sslibdsse.Envelope{}
+
+		tmpDir := t.TempDir()
+		repo := gitinterface.CreateTestGitRepository(t, tmpDir, false)
+
+		attestations := &Attestations{}
+
+		// This should fail validation
+		err := attestations.SetGitHubPullRequestApprovalAttestation(repo, invalidEnv, baseURL, 1, appName, testRef, testID, testID)
+		assert.NotNil(t, err)
+		assert.ErrorIs(t, err, github.ErrInvalidPullRequestApprovalAttestation)
+	})
 }
 
 func TestGetGitHubPullRequestApprovalAttestation(t *testing.T) {
@@ -85,21 +102,6 @@ func TestGetGitHubPullRequestApprovalAttestation(t *testing.T) {
 		featureAuth, err := attestations.GetGitHubPullRequestApprovalAttestationFor(repo, appName, testAnotherRef, testID, testID)
 		assert.Nil(t, err)
 		assert.Equal(t, featureZeroZero, featureAuth)
-	})
-
-	t.Run("validation error", func(t *testing.T) {
-		// Create an invalid envelope (empty envelope)
-		invalidEnv := &sslibdsse.Envelope{}
-
-		tmpDir := t.TempDir()
-		repo := gitinterface.CreateTestGitRepository(t, tmpDir, false)
-
-		attestations := &Attestations{}
-
-		// This should fail validation
-		err := attestations.SetGitHubPullRequestApprovalAttestation(repo, invalidEnv, baseURL, 1, appName, testRef, testID, testID)
-		assert.NotNil(t, err)
-		assert.ErrorIs(t, err, github.ErrInvalidPullRequestApprovalAttestation)
 	})
 
 	t.Run("conflicting index path", func(t *testing.T) {
@@ -215,6 +217,7 @@ func TestGetGitHubPullRequestApprovalAttestationForReviewID(t *testing.T) {
 		// Try to get attestation with invalid URL
 		_, err := attestations.GetGitHubPullRequestApprovalAttestationForReviewID(repo, "invalid-url", 123, "github")
 		assert.NotNil(t, err)
+		assert.ErrorIs(t, err, github.ErrGitHubReviewIDNotFound)
 	})
 }
 
