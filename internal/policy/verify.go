@@ -585,7 +585,38 @@ func (v *PolicyVerifier) VerifyRelativeForRef(ctx context.Context, firstEntry, l
 					slog.Debug("Checking if entry has been revoked...")
 					// If the invalid entry is never marked as skipped, we return err
 					if !entry.SkippedBy(annotations[entry.GetID().String()]) {
-						return err
+						// TODO: This is where we would need to switch into
+						// "auto recover mode"
+						if !automaticRepair {
+							return err
+						}
+						// TODO: Perform automatic repair of the repository here.
+
+						// 0. Revoke the problematic entry.
+						if err := rsl.NewAnnotationEntry([]gitinterface.Hash{entry.ID}, true, "Automatic fixup revocation").Commit(v.repo, true); err != nil {
+							return err
+						}
+
+						// 1. What's the last good state?
+						slog.Debug("Identifying last valid state...")
+						lastGoodEntry, lastGoodEntryAnnotations, err := rsl.GetLatestReferenceUpdaterEntry(v.repo, rsl.ForReference(invalidEntry.GetRefName()), rsl.BeforeEntryID(invalidEntry.GetID()), rsl.IsUnskipped(), rsl.IsReferenceEntry())
+						if err != nil {
+							return err
+						}
+						slog.Debug("Verifying identified last valid entry has not been revoked...")
+						if lastGoodEntry.(*rsl.ReferenceEntry).SkippedBy(lastGoodEntryAnnotations) {
+							// this type assertion is fine because we use the rsl.IsReferenceEntry opt
+							return ErrLastGoodEntryIsSkipped
+						}
+						// require lastGoodEntry != nil
+
+						// gittuf requires the fix to point to a commit that is tree-same as the
+						// last good state
+						lastGoodTreeID, err := v.repo.GetCommitTreeID(lastGoodEntry.GetTargetID())
+						if err != nil {
+							return err
+						}
+						// TODO: Continue...
 					}
 
 					// The invalid entry's been marked as skipped but we still need
@@ -596,10 +627,8 @@ func (v *PolicyVerifier) VerifyRelativeForRef(ctx context.Context, firstEntry, l
 
 					if len(entries) == 0 {
 						// Fix entry does not exist after revoking annotation
-						if !automaticRepair {
-							return verificationErr
-						}
-						// TODO: Perform automatic repair of the repository here.
+						return verificationErr
+
 					}
 				} else if v.persistentCacheEnabled {
 					// Verification has passed, add to cache
