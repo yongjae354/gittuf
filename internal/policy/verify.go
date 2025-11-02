@@ -585,13 +585,12 @@ func (v *PolicyVerifier) VerifyRelativeForRef(ctx context.Context, firstEntry, l
 					slog.Debug("Checking if entry has been revoked...")
 					// If the invalid entry is never marked as skipped, we return err
 					if !entry.SkippedBy(annotations[entry.GetID().String()]) {
-						// TODO: This is where we would need to switch into
-						// "auto recover mode"
 						if !automaticRepair {
+							slog.Debug("Automatic recovery of repository not enabled. Verification failed.")
 							return err
 						}
-						// TODO: Perform automatic repair of the repository here.
 
+						slog.Debug("Automatic recovery of repository enabled. Attempting automatic recovery...")
 						// 0. Revoke the problematic entry.
 						if err := rsl.NewAnnotationEntry([]gitinterface.Hash{entry.ID}, true, "Automatic fixup revocation").Commit(v.repo, true); err != nil {
 							return err
@@ -599,7 +598,7 @@ func (v *PolicyVerifier) VerifyRelativeForRef(ctx context.Context, firstEntry, l
 
 						// 1. What's the last good state?
 						slog.Debug("Identifying last valid state...")
-						lastGoodEntry, lastGoodEntryAnnotations, err := rsl.GetLatestReferenceUpdaterEntry(v.repo, rsl.ForReference(invalidEntry.GetRefName()), rsl.BeforeEntryID(invalidEntry.GetID()), rsl.IsUnskipped(), rsl.IsReferenceEntry())
+						lastGoodEntry, lastGoodEntryAnnotations, err := rsl.GetLatestReferenceUpdaterEntry(v.repo, rsl.ForReference(entry.GetRefName()), rsl.BeforeEntryID(entry.GetID()), rsl.IsUnskipped(), rsl.IsReferenceEntry())
 						if err != nil {
 							return err
 						}
@@ -616,7 +615,20 @@ func (v *PolicyVerifier) VerifyRelativeForRef(ctx context.Context, firstEntry, l
 						if err != nil {
 							return err
 						}
-						// TODO: Continue...
+
+						newRefTip, err := v.repo.Commit(lastGoodTreeID, target, "Automatic fixup entry", true)
+						if err != nil {
+							return err
+						}
+
+						err = rsl.NewReferenceEntry(target, newRefTip).Commit(v.repo, true)
+						if err != nil {
+							return err
+						}
+
+						slog.Debug("Successfully recovered RSL! Please re-run verification.")
+
+						continue
 					}
 
 					// The invalid entry's been marked as skipped but we still need
