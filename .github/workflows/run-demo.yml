@@ -19,7 +19,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
       - name: Build gittuf
         run:  make just-install
       - name: Checkout demo repository
@@ -29,6 +29,6 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
-          python-version: '3.13'
+          python-version: '3.14'
       - name: Run demo script
         run: python run-demo.py --no-prompt
