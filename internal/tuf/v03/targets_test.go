@@ -1,7 +1,7 @@
 // Copyright The gittuf Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package v02
+package v03
 
 import (
 	"encoding/json"
@@ -26,7 +26,7 @@ func TestTargetsMetadataAndDelegations(t *testing.T) {
 
 	t.Run("test GetSchemaVersion", func(t *testing.T) {
 		version := targetsMetadata.GetSchemaVersion()
-		assert.Equal(t, "http://gittuf.dev/policy/rule-file/v0.2", version)
+		assert.Equal(t, "http://gittuf.dev/policy/rule-file/v0.3", version)
 	})
 
 	t.Run("test GetVersion and IncrementVersion", func(t *testing.T) {

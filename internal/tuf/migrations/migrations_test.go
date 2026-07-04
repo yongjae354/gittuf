@@ -11,6 +11,7 @@ import (
 	artifacts "github.com/gittuf/gittuf/internal/testartifacts"
 	"github.com/gittuf/gittuf/internal/tuf"
 	tufv01 "github.com/gittuf/gittuf/internal/tuf/v01"
+	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -179,5 +180,110 @@ func TestMigrateTargetsMetadataV01ToV02(t *testing.T) {
 
 		assert.Equal(t, tuf.AllowRuleName, v02Targets.Delegations.Roles[1].Name)
 		assert.True(t, v02Targets.Delegations.Roles[1].Terminating)
+	})
+}
+
+func TestMigrateRootMetadataV02ToV03(t *testing.T) {
+	key := tufv01.NewKeyFromSSLibKey(ssh.NewKeyFromBytes(t, rootPubKeyBytes))
+
+	t.Run("test basic fields, version and roles", func(t *testing.T) {
+		v02Root := tufv02.NewRootMetadata()
+		v02Root.SetExpires(time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339))
+		v02Root.SetRepositoryLocation("https://example.com/repo")
+		v02Root.Version = 5
+
+		err := v02Root.AddRootPrincipal(key)
+		assert.Nil(t, err)
+
+		v03Root := MigrateRootMetadataV02ToV03(v02Root)
+
+		assert.Equal(t, "2030-01-01T00:00:00Z", v03Root.Expires)
+		assert.Equal(t, "https://example.com/repo", v03Root.RepositoryLocation)
+		// version is preserved across the migration
+		assert.Equal(t, uint64(5), v03Root.Version)
+		assert.Contains(t, v03Root.Principals, key.KeyID)
+
+		rootRole, hasRoot := v03Root.Roles[tuf.RootRoleName]
+		assert.True(t, hasRoot)
+		assert.True(t, rootRole.PrincipalIDs.Has(key.KeyID))
+		assert.Equal(t, 1, rootRole.Threshold)
+	})
+
+	t.Run("test multi-repository", func(t *testing.T) {
+		// nil case
+		v02Root := tufv02.NewRootMetadata()
+		v03Root := MigrateRootMetadataV02ToV03(v02Root)
+		assert.Nil(t, v03Root.MultiRepository)
+
+		// with controller and network repos
+		v02Root = tufv02.NewRootMetadata()
+		err := v02Root.AddRootPrincipal(key)
+		assert.Nil(t, err)
+
+		err = v02Root.EnableController()
+		assert.Nil(t, err)
+
+		err = v02Root.AddControllerRepository("controller-repo", "https://example.com/controller", []tuf.Principal{key})
+		assert.Nil(t, err)
+
+		err = v02Root.AddNetworkRepository("network-repo", "https://example.com/network", []tuf.Principal{key})
+		assert.Nil(t, err)
+
+		v03Root = MigrateRootMetadataV02ToV03(v02Root)
+
+		assert.NotNil(t, v03Root.MultiRepository)
+		assert.True(t, v03Root.MultiRepository.Controller)
+
+		assert.Equal(t, 1, len(v03Root.MultiRepository.ControllerRepositories))
+		assert.Equal(t, "controller-repo", v03Root.MultiRepository.ControllerRepositories[0].Name)
+		assert.Equal(t, 1, len(v03Root.MultiRepository.NetworkRepositories))
+		assert.Equal(t, "network-repo", v03Root.MultiRepository.NetworkRepositories[0].Name)
+	})
+}
+
+func TestMigrateTargetsMetadataV02ToV03(t *testing.T) {
+	t.Run("test basic fields and version", func(t *testing.T) {
+		v02Targets := tufv02.NewTargetsMetadata()
+		v02Targets.SetExpires(time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339))
+		v02Targets.Version = 7
+
+		v03Targets := MigrateTargetsMetadataV02ToV03(v02Targets)
+
+		assert.Equal(t, "2030-01-01T00:00:00Z", v03Targets.Expires)
+		assert.Equal(t, uint64(7), v03Targets.Version)
+	})
+
+	t.Run("test delegations with principals and rules", func(t *testing.T) {
+		v02Targets := tufv02.NewTargetsMetadata()
+
+		key1 := tufv01.NewKeyFromSSLibKey(ssh.NewKeyFromBytes(t, rootPubKeyBytes))
+		key2 := tufv01.NewKeyFromSSLibKey(ssh.NewKeyFromBytes(t, targetsPubKeyBytes))
+
+		err := v02Targets.AddPrincipal(key1)
+		assert.Nil(t, err)
+		err = v02Targets.AddPrincipal(key2)
+		assert.Nil(t, err)
+
+		err = v02Targets.AddRule("test-rule", []string{key1.KeyID, key2.KeyID}, []string{"git:refs/heads/*"}, 2)
+		assert.Nil(t, err)
+
+		v03Targets := MigrateTargetsMetadataV02ToV03(v02Targets)
+
+		assert.NotNil(t, v03Targets.Delegations)
+		assert.Equal(t, 2, len(v03Targets.Delegations.Principals))
+		assert.Contains(t, v03Targets.Delegations.Principals, key1.KeyID)
+		assert.Contains(t, v03Targets.Delegations.Principals, key2.KeyID)
+
+		assert.Equal(t, 2, len(v03Targets.Delegations.Roles))
+
+		rule := v03Targets.Delegations.Roles[0]
+		assert.Equal(t, "test-rule", rule.Name)
+		assert.Equal(t, []string{"git:refs/heads/*"}, rule.Paths)
+		assert.True(t, rule.PrincipalIDs.Has(key1.KeyID))
+		assert.True(t, rule.PrincipalIDs.Has(key2.KeyID))
+		assert.Equal(t, 2, rule.Threshold)
+
+		assert.Equal(t, tuf.AllowRuleName, v03Targets.Delegations.Roles[1].Name)
+		assert.True(t, v03Targets.Delegations.Roles[1].Terminating)
 	})
 }

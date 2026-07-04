@@ -8,6 +8,8 @@ import (
 	trustpolicyopts "github.com/gittuf/gittuf/experimental/gittuf/options/trustpolicy"
 	"github.com/gittuf/gittuf/internal/cmd/policy/persistent"
 	"github.com/gittuf/gittuf/internal/policy"
+	"github.com/gittuf/gittuf/internal/tuf"
+	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
 	"github.com/spf13/cobra"
 )
 
@@ -66,7 +68,26 @@ func (o *options) Run(cmd *cobra.Command, _ []string) error {
 		opts = append(opts, trustpolicyopts.WithRSLEntry())
 	}
 
-	return repo.AddTeamToTargets(cmd.Context(), signer, o.policyName, o.teamID, o.principalIDs, o.threshold, true, opts...)
+	principals, err := repo.ListPrincipals(cmd.Context(), policy.PolicyStagingRef, o.policyName)
+	if err != nil {
+		return err
+	}
+
+	members := []tuf.Principal{}
+	for _, principalID := range o.principalIDs {
+		principal, exists := principals[principalID]
+		if !exists {
+			return tuf.ErrInvalidPrincipalID
+		}
+		members = append(members, principal)
+	}
+
+	team, err := tufv03.NewTeam(o.teamID, members, o.threshold)
+	if err != nil {
+		return err
+	}
+
+	return repo.AddPrincipalToTargets(cmd.Context(), signer, o.policyName, []tuf.Principal{team}, true, opts...)
 }
 
 func New(persistent *persistent.Options) *cobra.Command {

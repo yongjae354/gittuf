@@ -20,6 +20,7 @@ import (
 	"github.com/gittuf/gittuf/internal/tuf/migrations"
 	tufv01 "github.com/gittuf/gittuf/internal/tuf/v01"
 	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
+	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
 	"github.com/gittuf/gittuf/pkg/gitinterface"
 )
 
@@ -70,7 +71,6 @@ type State struct {
 	verifiersCache map[string][]*SignatureVerifier
 	ruleNames      *set.Set[string]
 	allPrincipals  map[string]tuf.Principal
-	allTeams       map[string]tuf.Team
 	hasFileRule    bool
 	globalRules    map[string][]tuf.GlobalRule
 }
@@ -111,13 +111,31 @@ func (s *StateMetadata) getRootMetadataFromBytes(metadataBytes []byte, migrate b
 		}
 
 		if migrate {
-			return migrations.MigrateRootMetadataV01ToV02(rootMetadata), nil
+			rootMetadataV02 := migrations.MigrateRootMetadataV01ToV02(rootMetadata)
+
+			if tufv03.AllowV03Metadata() {
+				return migrations.MigrateRootMetadataV02ToV03(rootMetadataV02), nil
+			}
+
+			return rootMetadataV02, nil
 		}
 
 		return rootMetadata, nil
 
 	case schemaVersion == tufv02.RootVersion:
 		rootMetadata := &tufv02.RootMetadata{}
+		if err := json.Unmarshal(metadataBytes, rootMetadata); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal root metadata: %w", err)
+		}
+
+		if tufv03.AllowV03Metadata() && migrate {
+			return migrations.MigrateRootMetadataV02ToV03(rootMetadata), nil
+		}
+
+		return rootMetadata, nil
+
+	case schemaVersion == tufv03.RootVersion:
+		rootMetadata := &tufv03.RootMetadata{}
 		if err := json.Unmarshal(metadataBytes, rootMetadata); err != nil {
 			return nil, fmt.Errorf("unable to unmarshal root metadata: %w", err)
 		}
@@ -169,13 +187,31 @@ func (s *StateMetadata) GetTargetsMetadata(roleName string, migrate bool) (tuf.T
 		}
 
 		if migrate {
-			return migrations.MigrateTargetsMetadataV01ToV02(targetsMetadata), nil
+			targetsMetadataV02 := migrations.MigrateTargetsMetadataV01ToV02(targetsMetadata)
+
+			if tufv03.AllowV03Metadata() {
+				return migrations.MigrateTargetsMetadataV02ToV03(targetsMetadataV02), nil
+			}
+
+			return targetsMetadataV02, nil
 		}
 
 		return targetsMetadata, nil
 
 	case schemaVersion == tufv02.TargetsVersion:
 		targetsMetadata := &tufv02.TargetsMetadata{}
+		if err := json.Unmarshal(payloadBytes, targetsMetadata); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal rule file metadata: %w", err)
+		}
+
+		if tufv03.AllowV03Metadata() && migrate {
+			return migrations.MigrateTargetsMetadataV02ToV03(targetsMetadata), nil
+		}
+
+		return targetsMetadata, nil
+
+	case schemaVersion == tufv03.TargetsVersion:
+		targetsMetadata := &tufv03.TargetsMetadata{}
 		if err := json.Unmarshal(payloadBytes, targetsMetadata); err != nil {
 			return nil, fmt.Errorf("unable to unmarshal rule file metadata: %w", err)
 		}
@@ -478,11 +514,6 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 	}
 
 	allPrincipals := targetsMetadata.GetPrincipals()
-	allTeams, err := targetsMetadata.GetTeams()
-	if err != nil {
-		return nil, err
-	}
-
 	// each entry is a list of delegations from a particular metadata file
 	groupedDelegations := [][]tuf.Rule{
 		targetsMetadata.GetRules(),
@@ -512,14 +543,10 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 					repository: s.repository,
 					name:       delegation.ID(),
 					principals: make([]tuf.Principal, 0, delegation.GetPrincipalIDs().Len()),
-					teams:      make([]tuf.Team, 0, delegation.GetTeamIDs().Len()),
 					threshold:  delegation.GetThreshold(),
 				}
 				for _, principalID := range delegation.GetPrincipalIDs().Contents() {
 					verifier.principals = append(verifier.principals, allPrincipals[principalID])
-				}
-				for _, teamID := range delegation.GetTeamIDs().Contents() {
-					verifier.teams = append(verifier.teams, allTeams[teamID])
 				}
 				verifiers = append(verifiers, verifier)
 
@@ -539,14 +566,6 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 						allPrincipals[principalID] = principal
 					}
 
-					teamsIndelegatedMetadata, err := delegatedMetadata.GetTeams()
-					if err != nil {
-						return nil, err
-					}
-					for teamID, team := range teamsIndelegatedMetadata {
-						allTeams[teamID] = team
-					}
-
 					// Add the current metadata's further delegations upfront to
 					// be depth-first
 					groupedDelegations = append([][]tuf.Rule{delegatedMetadata.GetRules()}, groupedDelegations...)
@@ -564,11 +583,6 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 
 func (s *State) GetAllPrincipals() map[string]tuf.Principal {
 	return s.allPrincipals
-}
-
-// GetAllTeams returns all teams defined in the policy state.
-func (s *State) GetAllTeams() map[string]tuf.Team {
-	return s.allTeams
 }
 
 // Verify verifies the contents of the State for internal consistency.
@@ -1210,19 +1224,6 @@ func (s *State) preprocess() error {
 
 	for principalID, principal := range targetsMetadata.GetPrincipals() {
 		s.allPrincipals[principalID] = principal
-	}
-
-	if s.allTeams == nil {
-		s.allTeams = map[string]tuf.Team{}
-	}
-
-	teams, err := targetsMetadata.GetTeams()
-	if err != nil {
-		return err
-	}
-
-	for teamID, team := range teams {
-		s.allTeams[teamID] = team
 	}
 
 	for _, rule := range targetsMetadata.GetRules() {
