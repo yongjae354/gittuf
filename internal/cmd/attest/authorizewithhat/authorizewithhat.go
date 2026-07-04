@@ -6,7 +6,6 @@ import (
 	"github.com/gittuf/gittuf/experimental/gittuf"
 	attestopts "github.com/gittuf/gittuf/experimental/gittuf/options/attest"
 	"github.com/gittuf/gittuf/internal/cmd/attest/persistent"
-	"github.com/gittuf/gittuf/internal/cmd/common"
 	"github.com/spf13/cobra"
 )
 
@@ -81,7 +80,6 @@ func New(persistent *persistent.Options) *cobra.Command {
 		Use:               "authorize",
 		Short:             "Add or revoke reference authorization",
 		Args:              cobra.MinimumNArgs(1),
-		PreRunE:           common.CheckForSigningKeyFlag,
 		RunE:              o.Run,
 		DisableAutoGenTag: true,
 	}
