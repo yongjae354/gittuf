@@ -248,15 +248,6 @@ func (t *TargetsMetadata) GetRules() []tuf.Rule {
 	return rules
 }
 
-// GetTeams returns all the teams in the metadata.
-func (t *TargetsMetadata) GetTeams() (map[string]tuf.Team, error) {
-	teams := map[string]tuf.Team{}
-	for id, team := range t.Delegations.Teams {
-		teams[id] = team
-	}
-	return teams, nil
-}
-
 // AddPrincipal adds a principal to the metadata.
 //
 // TODO: this isn't associated with a specific rule; with the removal of
@@ -275,26 +266,10 @@ func (t *TargetsMetadata) RemovePrincipal(principalID string) error {
 	return t.Delegations.removePrincipal(principalID)
 }
 
-// AddTeam adds a team to the metadata.
-func (t *TargetsMetadata) AddTeam(teamID string, principals []tuf.Principal, threshold int) error {
-	return t.Delegations.addTeam(teamID, principals, threshold)
-}
-
-// RemoveTeam removes a team from the metadata.
-func (t *TargetsMetadata) RemoveTeam(teamID string) error {
-	return t.Delegations.removeTeam(teamID)
-}
-
-// UpdateTeam updates a team in the metadata with the given principals and threshold.
-func (t *TargetsMetadata) UpdateTeam(teamID string, principals []tuf.Principal, threshold int) error {
-	return t.Delegations.updateTeam(teamID, principals, threshold)
-}
-
 // Delegations defines the schema for specifying delegations in TUF's Targets
 // metadata.
 type Delegations struct {
 	Principals map[string]tuf.Principal `json:"principals"`
-	Teams      map[string]tuf.Team      `json:"teams"`
 	Roles      []*Delegation            `json:"roles"`
 }
 
@@ -303,7 +278,6 @@ func (d *Delegations) UnmarshalJSON(data []byte) error {
 	// json.RawMessage in place of tuf.Principal
 	type tempType struct {
 		Principals map[string]json.RawMessage `json:"principals"`
-		Teams      map[string]json.RawMessage `json:"teams"`
 		Roles      []*Delegation              `json:"roles"`
 	}
 
@@ -341,16 +315,18 @@ func (d *Delegations) UnmarshalJSON(data []byte) error {
 			continue
 		}
 
-		return fmt.Errorf("unrecognized principal type '%s'", string(principalBytes))
-	}
+		if _, has := tempPrincipal["teamID"]; has {
+			// this is *Team
+			team := &Team{}
+			if err := json.Unmarshal(principalBytes, team); err != nil {
+				return fmt.Errorf("unable to unmarshal json: %w", err)
+			}
 
-	d.Teams = make(map[string]tuf.Team)
-	for teamID, teamBytes := range temp.Teams {
-		team := &Team{}
-		if err := json.Unmarshal(teamBytes, team); err != nil {
-			return fmt.Errorf("unable to unmarshal json: %w", err)
+			d.Principals[principalID] = team
+			continue
 		}
-		d.Teams[teamID] = team
+
+		return fmt.Errorf("unrecognized principal type '%s'", string(principalBytes))
 	}
 
 	d.Roles = temp.Roles
@@ -358,15 +334,15 @@ func (d *Delegations) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// addPrincipal adds a delegations key or person.  v02 supports Key and Person
-// as principal types.
+// addPrincipal adds a delegations key, person or team. v02 supports Key,
+// Person, and Team as principal types.
 func (d *Delegations) addPrincipal(principal tuf.Principal) error {
 	if d.Principals == nil {
 		d.Principals = map[string]tuf.Principal{}
 	}
 
 	switch principal := principal.(type) {
-	case *Key, *Person:
+	case *Key, *Person, *Team:
 		d.Principals[principal.ID()] = principal
 	default:
 		return tuf.ErrInvalidPrincipalType
@@ -376,7 +352,7 @@ func (d *Delegations) addPrincipal(principal tuf.Principal) error {
 }
 
 // updatePrincipal updates an existing principal in the metadata. v02 supports
-// Key and Person as principal types.
+// Key, Person, and Team as principal types.
 func (d *Delegations) updatePrincipal(principal tuf.Principal) error {
 	if principal == nil {
 		return tuf.ErrInvalidPrincipalType
@@ -388,7 +364,7 @@ func (d *Delegations) updatePrincipal(principal tuf.Principal) error {
 	}
 
 	switch principal := principal.(type) {
-	case *Key, *Person:
+	case *Key, *Person, *Team:
 		d.Principals[principalID] = principal
 	default:
 		return tuf.ErrInvalidPrincipalType
@@ -397,8 +373,8 @@ func (d *Delegations) updatePrincipal(principal tuf.Principal) error {
 	return nil
 }
 
-// removePrincipal removes a delegations key or person. v02 supports Key and
-// Person as principal types.
+// removePrincipal removes a delegations key, person, or team. v02 supports Key,
+// Person, and Team as principal types.
 func (d *Delegations) removePrincipal(principalID string) error {
 	if d.Principals == nil {
 		return tuf.ErrPrincipalNotFound
@@ -412,58 +388,6 @@ func (d *Delegations) removePrincipal(principalID string) error {
 		}
 	}
 	delete(d.Principals, principalID)
-	return nil
-}
-
-func (d *Delegations) addTeam(teamID string, principals []tuf.Principal, threshold int) error {
-	if d.Teams == nil {
-		d.Teams = map[string]tuf.Team{}
-	}
-	team := &Team{
-		TeamID:     teamID,
-		Principals: principals,
-		Threshold:  threshold,
-	}
-	d.Teams[teamID] = team
-	return nil
-}
-
-func (d *Delegations) removeTeam(teamID string) error {
-	if d.Teams == nil {
-		return tuf.ErrTeamNotFound
-	}
-	if teamID == "" {
-		return tuf.ErrInvalidTeamID
-	}
-	if _, ok := d.Teams[teamID]; !ok {
-		return tuf.ErrTeamNotFound
-	}
-	for _, curRole := range d.Roles {
-		if curRole.GetTeamIDs() != nil && curRole.GetPrincipalIDs().Has(teamID) {
-			return tuf.ErrTeamStillInUse
-		}
-	}
-	delete(d.Teams, teamID)
-	return nil
-}
-
-func (d *Delegations) updateTeam(teamID string, principals []tuf.Principal, threshold int) error {
-	if d.Teams == nil {
-		return tuf.ErrTeamNotFound
-	}
-
-	if teamID == "" {
-		return tuf.ErrInvalidTeamID
-	}
-
-	val := d.Teams[teamID]
-	team, ok := val.(*Team)
-	if !ok {
-		return tuf.ErrTeamNotFound
-	}
-	team.Principals = principals
-	team.Threshold = threshold
-
 	return nil
 }
 
@@ -512,12 +436,6 @@ func (d *Delegation) GetPrincipalIDs() *set.Set[string] {
 	return d.PrincipalIDs
 }
 
-// GetTeamIDs returns the identifiers of the identifiers of the teams that are listed as
-// trusted by the rule.
-func (d *Delegation) GetTeamIDs() *set.Set[string] {
-	return d.TeamIDs
-}
-
 // GetThreshold returns the threshold of principals that must approve to meet
 // the rule.
 func (d *Delegation) GetThreshold() int {
@@ -537,50 +455,4 @@ func (d *Delegation) IsLastTrustedInRuleFile() bool {
 // delegation.
 func (d *Delegation) GetProtectedNamespaces() []string {
 	return d.Paths
-}
-
-func (t *Team) UnmarshalJSON(b []byte) error {
-	type tempType struct {
-		TeamID     string            `json:"teamID"`
-		Principals []json.RawMessage `json:"principals"`
-		Threshold  int               `json:"threshold"`
-	}
-
-	tempTeam := &tempType{}
-	if err := json.Unmarshal(b, tempTeam); err != nil {
-		return fmt.Errorf("unable to unmarshal json: %w", err)
-	}
-
-	t.TeamID = tempTeam.TeamID
-	t.Threshold = tempTeam.Threshold
-	t.Principals = make([]tuf.Principal, 0, len(tempTeam.Principals))
-
-	for _, principalBytes := range tempTeam.Principals {
-		tempPrincipal := map[string]any{}
-		if err := json.Unmarshal(principalBytes, &tempPrincipal); err != nil {
-			return fmt.Errorf("unable to unmarshal json: %w", err)
-		}
-
-		if _, has := tempPrincipal["keyid"]; has {
-			key := &Key{}
-			if err := json.Unmarshal(principalBytes, key); err != nil {
-				return fmt.Errorf("unable to unmarshal json: %w", err)
-			}
-			t.Principals = append(t.Principals, key)
-			continue
-		}
-
-		if _, has := tempPrincipal["personID"]; has {
-			person := &Person{}
-			if err := json.Unmarshal(principalBytes, person); err != nil {
-				return fmt.Errorf("unable to unmarshal json: %w", err)
-			}
-			t.Principals = append(t.Principals, person)
-			continue
-		}
-
-		return fmt.Errorf("unrecognized principal type '%s'", string(principalBytes))
-	}
-
-	return nil
 }

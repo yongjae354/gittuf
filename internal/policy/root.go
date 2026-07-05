@@ -15,6 +15,7 @@ import (
 // expiry date set to one year from now, and the provided key is added.
 func InitializeRootMetadata(key tuf.Principal) (tuf.RootMetadata, error) {
 	rootMetadata := tufv02.NewRootMetadata()
+
 	rootMetadata.SetExpires(time.Now().AddDate(1, 0, 0).Format(time.RFC3339))
 
 	if err := rootMetadata.AddRootPrincipal(key); err != nil {

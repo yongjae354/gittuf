@@ -530,7 +530,8 @@ func TestRemovePrincipalFromTargets(t *testing.T) {
 	})
 }
 
-func TestAddTeamToTargets(t *testing.T) {
+func TestAddTeamPrincipalToTargets(t *testing.T) {
+
 	r := createTestRepositoryWithPolicy(t, "")
 
 	targetsSigner := setupSSHKeysForSigning(t, targetsKeyBytes, targetsPubKeyBytes)
@@ -542,7 +543,15 @@ func TestAddTeamToTargets(t *testing.T) {
 	}
 	gpgKey := tufv01.NewKeyFromSSLibKey(gpgKeyR)
 
-	authorizedKeysBytes := []tuf.Principal{targetsPubKey, gpgKey}
+	alice := &tufv02.Person{
+		PersonID:   "alice",
+		PublicKeys: map[string]*tufv02.Key{targetsPubKey.KeyID: targetsPubKey},
+	}
+	bob := &tufv02.Person{
+		PersonID:   "bob",
+		PublicKeys: map[string]*tufv02.Key{gpgKey.KeyID: gpgKey},
+	}
+	authorizedPrincipals := []tuf.Principal{alice, bob}
 
 	state, err := policy.LoadCurrentState(testCtx, r.r, policy.PolicyStagingRef)
 	if err != nil {
@@ -554,15 +563,13 @@ func TestAddTeamToTargets(t *testing.T) {
 	assert.Contains(t, targetsMetadata.GetPrincipals(), gpgKey.KeyID)
 	assert.Equal(t, 1, len(targetsMetadata.GetPrincipals()))
 
-	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedKeysBytes, false)
+	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedPrincipals, false)
 	assert.Nil(t, err)
 
-	err = r.AddTeamToTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team1", []string{targetsPubKey.KeyID, gpgKey.KeyID}, 1, false)
+	team, err := tufv02.NewTeam("team1", authorizedPrincipals, 1)
 	assert.Nil(t, err)
-
-	err = r.AddTeamToTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team2", []string{"nonexistent-ID"}, 1, false)
-	assert.NotNil(t, err)
-	assert.ErrorIs(t, err, tuf.ErrInvalidPrincipalID)
+	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, []tuf.Principal{team}, false)
+	assert.Nil(t, err)
 
 	err = r.StagePolicy(testCtx, "", true, false)
 	require.Nil(t, err)
@@ -574,15 +581,28 @@ func TestAddTeamToTargets(t *testing.T) {
 
 	targetsMetadata, err = state.GetTargetsMetadata(policy.TargetsRoleName, false)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, len(targetsMetadata.GetPrincipals()))
+	// Existing key, two persons, and the team, which is itself a principal.
+	assert.Equal(t, 4, len(targetsMetadata.GetPrincipals()))
 
-	teams, err := targetsMetadata.GetTeams()
-	assert.Nil(t, err)
+	teams := filterTeams(targetsMetadata.GetPrincipals())
 	assert.Contains(t, teams, "team1")
 	assert.Equal(t, 1, len(teams))
+	assert.Len(t, teams["team1"].Keys(), 2)
 }
 
-func TestRemoveTeamFromTargets(t *testing.T) {
+// filterTeams returns the subset of principals that are teams, keyed by ID.
+func filterTeams(principals map[string]tuf.Principal) map[string]*tufv02.Team {
+	teams := map[string]*tufv02.Team{}
+	for id, principal := range principals {
+		if team, ok := principal.(*tufv02.Team); ok {
+			teams[id] = team
+		}
+	}
+	return teams
+}
+
+func TestRemoveTeamPrincipalFromTargets(t *testing.T) {
+
 	r := createTestRepositoryWithPolicy(t, "")
 
 	targetsSigner := setupSSHKeysForSigning(t, targetsKeyBytes, targetsPubKeyBytes)
@@ -594,7 +614,15 @@ func TestRemoveTeamFromTargets(t *testing.T) {
 	}
 	gpgKey := tufv01.NewKeyFromSSLibKey(gpgKeyR)
 
-	authorizedKeysBytes := []tuf.Principal{targetsPubKey, gpgKey}
+	alice := &tufv02.Person{
+		PersonID:   "alice",
+		PublicKeys: map[string]*tufv02.Key{targetsPubKey.KeyID: targetsPubKey},
+	}
+	bob := &tufv02.Person{
+		PersonID:   "bob",
+		PublicKeys: map[string]*tufv02.Key{gpgKey.KeyID: gpgKey},
+	}
+	authorizedPrincipals := []tuf.Principal{alice, bob}
 
 	state, err := policy.LoadCurrentState(testCtx, r.r, policy.PolicyStagingRef)
 	if err != nil {
@@ -606,17 +634,21 @@ func TestRemoveTeamFromTargets(t *testing.T) {
 	assert.Contains(t, targetsMetadata.GetPrincipals(), gpgKey.KeyID)
 	assert.Equal(t, 1, len(targetsMetadata.GetPrincipals()))
 
-	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedKeysBytes, false)
+	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedPrincipals, false)
 	assert.Nil(t, err)
 
-	err = r.AddTeamToTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team1", []string{targetsPubKey.KeyID, gpgKey.KeyID}, 1, false)
+	team, err := tufv02.NewTeam("team1", authorizedPrincipals, 1)
+	assert.Nil(t, err)
+	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, []tuf.Principal{team}, false)
 	assert.Nil(t, err)
 
-	err = r.RemoveTeamFromTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team1", false)
+	err = r.RemovePrincipalFromTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team1", false)
 	assert.Nil(t, err)
 
-	err = r.RemoveTeamFromTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team2", false)
-	assert.ErrorIs(t, tuf.ErrTeamNotFound, err)
+	// Removing a team that does not exist is a no-op under the principal
+	// removal semantics.
+	err = r.RemovePrincipalFromTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team2", false)
+	assert.Nil(t, err)
 
 	err = r.StagePolicy(testCtx, "", true, false)
 	require.Nil(t, err)
@@ -629,12 +661,12 @@ func TestRemoveTeamFromTargets(t *testing.T) {
 	targetsMetadata, err = state.GetTargetsMetadata(policy.TargetsRoleName, false)
 	assert.Nil(t, err)
 
-	teams, err := targetsMetadata.GetTeams()
-	assert.Nil(t, err)
+	teams := filterTeams(targetsMetadata.GetPrincipals())
 	assert.Equal(t, 0, len(teams))
 }
 
-func TestUpdateTeamInTargets(t *testing.T) {
+func TestUpdateTeamPrincipalInTargets(t *testing.T) {
+
 	r := createTestRepositoryWithPolicy(t, "")
 
 	targetsSigner := setupSSHKeysForSigning(t, targetsKeyBytes, targetsPubKeyBytes)
@@ -646,7 +678,15 @@ func TestUpdateTeamInTargets(t *testing.T) {
 	}
 	gpgKey := tufv01.NewKeyFromSSLibKey(gpgKeyR)
 
-	authorizedKeysBytes := []tuf.Principal{targetsPubKey, gpgKey}
+	alice := &tufv02.Person{
+		PersonID:   "alice",
+		PublicKeys: map[string]*tufv02.Key{targetsPubKey.KeyID: targetsPubKey},
+	}
+	bob := &tufv02.Person{
+		PersonID:   "bob",
+		PublicKeys: map[string]*tufv02.Key{gpgKey.KeyID: gpgKey},
+	}
+	authorizedPrincipals := []tuf.Principal{alice, bob}
 
 	state, err := policy.LoadCurrentState(testCtx, r.r, policy.PolicyStagingRef)
 	if err != nil {
@@ -658,18 +698,26 @@ func TestUpdateTeamInTargets(t *testing.T) {
 	assert.Contains(t, targetsMetadata.GetPrincipals(), gpgKey.KeyID)
 	assert.Equal(t, 1, len(targetsMetadata.GetPrincipals()))
 
-	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedKeysBytes, false)
+	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedPrincipals, false)
 	assert.Nil(t, err)
 
-	err = r.AddTeamToTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team1", []string{}, 1, false)
+	team, err := tufv02.NewTeam("team1", nil, 1)
+	assert.Nil(t, err)
+	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, []tuf.Principal{team}, false)
 	assert.Nil(t, err)
 
-	err = r.UpdateTeamInTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team1", []string{targetsPubKey.KeyID, gpgKey.KeyID}, 2, false)
+	// Update threshold of team1
+	team, err = tufv02.NewTeam("team1", authorizedPrincipals, 2)
+	assert.Nil(t, err)
+	err = r.UpdatePrincipalInTargets(testCtx, targetsSigner, policy.TargetsRoleName, team, false)
 	assert.Nil(t, err)
 
-	err = r.UpdateTeamInTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team2", []string{targetsPubKey.KeyID, gpgKey.KeyID}, 2, false)
+	// Updating a team that does not exist fails with ErrPrincipalNotFound
+	team, err = tufv02.NewTeam("team2", authorizedPrincipals, 2)
+	assert.Nil(t, err)
+	err = r.UpdatePrincipalInTargets(testCtx, targetsSigner, policy.TargetsRoleName, team, false)
 	assert.NotNil(t, err)
-	assert.ErrorIs(t, err, tuf.ErrTeamNotFound)
+	assert.ErrorIs(t, err, tuf.ErrPrincipalNotFound)
 
 	err = r.StagePolicy(testCtx, "", true, false)
 	require.Nil(t, err)
@@ -681,16 +729,14 @@ func TestUpdateTeamInTargets(t *testing.T) {
 
 	targetsMetadata, err = state.GetTargetsMetadata(policy.TargetsRoleName, false)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, len(targetsMetadata.GetPrincipals()))
+	// Existing key, two persons, and the team.
+	assert.Equal(t, 4, len(targetsMetadata.GetPrincipals()))
 
-	teams, err := targetsMetadata.GetTeams()
-	assert.Nil(t, err)
+	teams := filterTeams(targetsMetadata.GetPrincipals())
 	assert.Contains(t, teams, "team1")
 	assert.Equal(t, 1, len(teams))
-	assert.Equal(t, 2, len(teams["team1"].GetPrincipals()))
-	assert.Contains(t, teams["team1"].GetPrincipals(), targetsPubKey)
-	assert.Contains(t, teams["team1"].GetPrincipals(), gpgKey)
 	assert.Equal(t, 2, teams["team1"].GetThreshold())
+	assert.Len(t, teams["team1"].Keys(), 2)
 }
 
 func TestSignTargets(t *testing.T) {
