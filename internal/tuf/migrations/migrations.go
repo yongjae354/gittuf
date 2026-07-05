@@ -137,7 +137,7 @@ func MigrateRootMetadataV02ToV03(rootMetadata *tufv02.RootMetadata) *tufv03.Root
 	// Set repository location
 	newRootMetadata.RepositoryLocation = rootMetadata.RepositoryLocation
 
-	// Set principals (teams carry over automatically as principals)
+	// Set principals (v02 principals (keys, persons) carry over directly)
 	newRootMetadata.Principals = rootMetadata.Principals
 
 	// Set roles
@@ -200,7 +200,7 @@ func MigrateTargetsMetadataV02ToV03(targetsMetadata *tufv02.TargetsMetadata) *tu
 	// Set same version number
 	newTargetsMetadata.Version = targetsMetadata.Version
 
-	// Set delegations (principals, incl. teams, carry over directly)
+	// Set delegations (v02 principals (keys, persons) carry over directly)
 	newTargetsMetadata.Delegations = &tufv03.Delegations{
 		Principals: targetsMetadata.Delegations.Principals,
 		Roles:      []*tufv03.Delegation{},

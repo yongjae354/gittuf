@@ -26,6 +26,7 @@ import (
 	"github.com/gittuf/gittuf/internal/tuf"
 	tufv01 "github.com/gittuf/gittuf/internal/tuf/v01"
 	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
+	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
 	"github.com/gittuf/gittuf/pkg/gitinterface"
 	"github.com/secure-systems-lab/go-securesystemslib/signerverifier"
 )
@@ -837,6 +838,8 @@ func (r *Repository) AddPropagationDirective(ctx context.Context, signer sslibds
 		directive = tufv01.NewPropagationDirective(directiveName, upstreamRepository, upstreamReference, upstreamPath, downstreamReference, downstreamPath)
 	case *tufv02.RootMetadata:
 		directive = tufv02.NewPropagationDirective(directiveName, upstreamRepository, upstreamReference, upstreamPath, downstreamReference, downstreamPath)
+	case *tufv03.RootMetadata:
+		directive = tufv03.NewPropagationDirective(directiveName, upstreamRepository, upstreamReference, upstreamPath, downstreamReference, downstreamPath)
 	}
 
 	if err := rootMetadata.AddPropagationDirective(directive); err != nil {
@@ -888,6 +891,8 @@ func (r *Repository) UpdatePropagationDirective(ctx context.Context, signer ssli
 		directive = tufv01.NewPropagationDirective(directiveName, upstreamRepository, upstreamReference, upstreamPath, downstreamReference, downstreamPath)
 	case *tufv02.RootMetadata:
 		directive = tufv02.NewPropagationDirective(directiveName, upstreamRepository, upstreamReference, upstreamPath, downstreamReference, downstreamPath)
+	case *tufv03.RootMetadata:
+		directive = tufv03.NewPropagationDirective(directiveName, upstreamRepository, upstreamReference, upstreamPath, downstreamReference, downstreamPath)
 	}
 
 	if err := rootMetadata.UpdatePropagationDirective(directive); err != nil {
