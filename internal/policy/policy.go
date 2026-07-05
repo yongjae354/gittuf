@@ -70,7 +70,6 @@ type State struct {
 	verifiersCache map[string][]*SignatureVerifier
 	ruleNames      *set.Set[string]
 	allPrincipals  map[string]tuf.Principal
-	allTeams       map[string]tuf.Team
 	hasFileRule    bool
 	globalRules    map[string][]tuf.GlobalRule
 }
@@ -478,10 +477,6 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 	}
 
 	allPrincipals := targetsMetadata.GetPrincipals()
-	allTeams, err := targetsMetadata.GetTeams()
-	if err != nil {
-		return nil, err
-	}
 
 	// each entry is a list of delegations from a particular metadata file
 	groupedDelegations := [][]tuf.Rule{
@@ -512,14 +507,10 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 					repository: s.repository,
 					name:       delegation.ID(),
 					principals: make([]tuf.Principal, 0, delegation.GetPrincipalIDs().Len()),
-					teams:      make([]tuf.Team, 0, delegation.GetTeamIDs().Len()),
 					threshold:  delegation.GetThreshold(),
 				}
 				for _, principalID := range delegation.GetPrincipalIDs().Contents() {
 					verifier.principals = append(verifier.principals, allPrincipals[principalID])
-				}
-				for _, teamID := range delegation.GetTeamIDs().Contents() {
-					verifier.teams = append(verifier.teams, allTeams[teamID])
 				}
 				verifiers = append(verifiers, verifier)
 
@@ -539,14 +530,6 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 						allPrincipals[principalID] = principal
 					}
 
-					teamsIndelegatedMetadata, err := delegatedMetadata.GetTeams()
-					if err != nil {
-						return nil, err
-					}
-					for teamID, team := range teamsIndelegatedMetadata {
-						allTeams[teamID] = team
-					}
-
 					// Add the current metadata's further delegations upfront to
 					// be depth-first
 					groupedDelegations = append([][]tuf.Rule{delegatedMetadata.GetRules()}, groupedDelegations...)
@@ -564,11 +547,6 @@ func (s *State) findVerifiersForPathIfProtected(path string) ([]*SignatureVerifi
 
 func (s *State) GetAllPrincipals() map[string]tuf.Principal {
 	return s.allPrincipals
-}
-
-// GetAllTeams returns all teams defined in the policy state.
-func (s *State) GetAllTeams() map[string]tuf.Team {
-	return s.allTeams
 }
 
 // Verify verifies the contents of the State for internal consistency.
@@ -1210,19 +1188,6 @@ func (s *State) preprocess() error {
 
 	for principalID, principal := range targetsMetadata.GetPrincipals() {
 		s.allPrincipals[principalID] = principal
-	}
-
-	if s.allTeams == nil {
-		s.allTeams = map[string]tuf.Team{}
-	}
-
-	teams, err := targetsMetadata.GetTeams()
-	if err != nil {
-		return err
-	}
-
-	for teamID, team := range teams {
-		s.allTeams[teamID] = team
 	}
 
 	for _, rule := range targetsMetadata.GetRules() {

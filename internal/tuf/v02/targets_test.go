@@ -94,109 +94,6 @@ func TestTargetsMetadataAndDelegations(t *testing.T) {
 		assert.Empty(t, delegations.Principals)
 	})
 
-	t.Run("test AddTeam", func(t *testing.T) {
-		targetsMetadata := NewTargetsMetadata()
-		assert.Nil(t, targetsMetadata.Delegations.Teams)
-
-		team1 := &Team{
-			TeamID:     "team1",
-			Principals: []tuf.Principal{},
-			Threshold:  1,
-		}
-
-		err := targetsMetadata.AddTeam("team1", []tuf.Principal{}, 1)
-		assert.Nil(t, err)
-		assert.Equal(t, team1, targetsMetadata.Delegations.Teams["team1"])
-
-		team2 := &Team{
-			TeamID:     "team2",
-			Principals: []tuf.Principal{person},
-			Threshold:  1,
-		}
-
-		err = targetsMetadata.AddTeam("team2", []tuf.Principal{person}, 1)
-		assert.Nil(t, err)
-		assert.Equal(t, team2, targetsMetadata.Delegations.Teams["team2"])
-	})
-
-	t.Run("test RemoveTeam", func(t *testing.T) {
-		targetsMetadata := NewTargetsMetadata()
-		assert.Nil(t, targetsMetadata.Delegations.Teams)
-
-		team1 := &Team{
-			TeamID:     "team1",
-			Principals: []tuf.Principal{},
-			Threshold:  1,
-		}
-
-		err := targetsMetadata.AddTeam("team1", []tuf.Principal{}, 1)
-		assert.Nil(t, err)
-		assert.Equal(t, team1, targetsMetadata.Delegations.Teams["team1"])
-
-		err = targetsMetadata.RemoveTeam("team1")
-		assert.Nil(t, err)
-		assert.Empty(t, targetsMetadata.Delegations.Teams)
-
-		err = targetsMetadata.RemoveTeam("team2")
-		assert.ErrorIs(t, err, tuf.ErrTeamNotFound)
-	})
-
-	t.Run("test UpdateTeam", func(t *testing.T) {
-		targetsMetadata := NewTargetsMetadata()
-		assert.Nil(t, targetsMetadata.Delegations.Teams)
-
-		team1 := &Team{
-			TeamID:     "team1",
-			Principals: []tuf.Principal{},
-			Threshold:  1,
-		}
-
-		err := targetsMetadata.AddTeam("team1", []tuf.Principal{}, 1)
-		assert.Nil(t, err)
-		assert.Equal(t, team1, targetsMetadata.Delegations.Teams["team1"])
-
-		err = targetsMetadata.UpdateTeam("team1", []tuf.Principal{person}, 2)
-		assert.Nil(t, err)
-		assert.Equal(t, []tuf.Principal{person}, targetsMetadata.Delegations.Teams["team1"].GetPrincipals())
-		assert.Equal(t, 2, targetsMetadata.Delegations.Teams["team1"].GetThreshold())
-	})
-
-	t.Run("test GetTeams", func(t *testing.T) {
-		targetsMetadata := NewTargetsMetadata()
-		assert.Nil(t, targetsMetadata.Delegations.Teams)
-
-		team1 := &Team{
-			TeamID:     "team1",
-			Principals: []tuf.Principal{},
-			Threshold:  1,
-		}
-
-		err := targetsMetadata.AddTeam("team1", []tuf.Principal{}, 1)
-		assert.Nil(t, err)
-		assert.Equal(t, team1, targetsMetadata.Delegations.Teams["team1"])
-
-		team2 := &Team{
-			TeamID:     "team2",
-			Principals: []tuf.Principal{person},
-			Threshold:  1,
-		}
-
-		err = targetsMetadata.AddTeam("team2", []tuf.Principal{person}, 1)
-		assert.Nil(t, err)
-		assert.Equal(t, team2, targetsMetadata.Delegations.Teams["team2"])
-
-		expected := map[string]tuf.Team{"team1": team1, "team2": team2}
-		teams, err := targetsMetadata.GetTeams()
-		assert.Nil(t, err)
-		assert.Equal(t, expected, teams)
-
-		err = targetsMetadata.RemoveTeam("team1")
-		assert.Nil(t, err)
-		expected = map[string]tuf.Team{"team2": team2}
-		teams, err = targetsMetadata.GetTeams()
-		assert.Nil(t, err)
-		assert.Equal(t, expected, teams)
-	})
 }
 
 func TestDelegationsUnmarshalJSON(t *testing.T) {
@@ -725,6 +622,64 @@ func TestUpdatePrincipal(t *testing.T) {
 	err = targetsMetadata.UpdatePrincipal(person2)
 	assert.Nil(t, err)
 	assert.Equal(t, person2, targetsMetadata.Delegations.Principals[person1.PersonID])
+}
+
+func TestTeamPrincipalMemberIDValidation(t *testing.T) {
+	targetsMetadata := initialTestTargetsMetadata(t)
+
+	key1 := NewKeyFromSSLibKey(ssh.NewKeyFromBytes(t, targets1PubKeyBytes))
+	key2 := NewKeyFromSSLibKey(ssh.NewKeyFromBytes(t, targets2PubKeyBytes))
+
+	person1 := &Person{
+		PersonID: "jane.doe",
+		PublicKeys: map[string]*Key{
+			key1.KeyID: key1,
+		},
+	}
+	person2 := &Person{
+		PersonID: "john.doe",
+		PublicKeys: map[string]*Key{
+			key2.KeyID: key2,
+		},
+	}
+
+	assert.Nil(t, targetsMetadata.AddPrincipal(key1))
+	assert.Nil(t, targetsMetadata.AddPrincipal(person1))
+	assert.Nil(t, targetsMetadata.AddPrincipal(person2))
+
+	team, err := NewTeam("team", []string{person1.ID(), person2.ID()}, 2)
+	assert.Nil(t, err)
+	assert.Nil(t, targetsMetadata.AddPrincipal(team))
+	assert.Equal(t, team, targetsMetadata.Delegations.Principals[team.ID()])
+
+	missingMemberTeam, err := NewTeam("missing-member-team", []string{"missing"}, 1)
+	assert.Nil(t, err)
+	assert.ErrorIs(t, targetsMetadata.AddPrincipal(missingMemberTeam), tuf.ErrPrincipalNotFound)
+
+	keyMemberTeam, err := NewTeam("key-member-team", []string{key1.ID()}, 1)
+	assert.Nil(t, err)
+	assert.ErrorIs(t, targetsMetadata.AddPrincipal(keyMemberTeam), tuf.ErrInvalidPrincipalType)
+
+	impossibleThresholdTeam, err := NewTeam("impossible-threshold-team", []string{person1.ID()}, 2)
+	assert.Nil(t, err)
+	assert.ErrorIs(t, targetsMetadata.AddPrincipal(impossibleThresholdTeam), tuf.ErrCannotMeetThreshold)
+
+	emptyIDTeam, err := NewTeam("", []string{person1.ID()}, 1)
+	assert.Nil(t, err)
+	assert.ErrorIs(t, targetsMetadata.AddPrincipal(emptyIDTeam), tuf.ErrInvalidPrincipalID)
+
+	invalidThresholdTeam, err := NewTeam("invalid-threshold-team", []string{person1.ID()}, 0)
+	assert.Nil(t, err)
+	assert.ErrorIs(t, targetsMetadata.AddPrincipal(invalidThresholdTeam), tuf.ErrInvalidThreshold)
+
+	updatedTeam, err := NewTeam("team", []string{person1.ID()}, 1)
+	assert.Nil(t, err)
+	assert.Nil(t, targetsMetadata.UpdatePrincipal(updatedTeam))
+	assert.Equal(t, updatedTeam, targetsMetadata.Delegations.Principals[team.ID()])
+
+	invalidUpdatedTeam, err := NewTeam("team", []string{key1.ID()}, 1)
+	assert.Nil(t, err)
+	assert.ErrorIs(t, targetsMetadata.UpdatePrincipal(invalidUpdatedTeam), tuf.ErrInvalidPrincipalType)
 }
 
 func TestGetPrincipals(t *testing.T) {

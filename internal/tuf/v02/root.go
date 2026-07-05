@@ -417,6 +417,17 @@ func (r *RootMetadata) UnmarshalJSON(data []byte) error {
 			continue
 		}
 
+		if _, has := tempPrincipal["teamID"]; has {
+			// this is *Team
+			team := &Team{}
+			if err := json.Unmarshal(principalBytes, team); err != nil {
+				return fmt.Errorf("unable to unmarshal json: %w", err)
+			}
+
+			r.Principals[principalID] = team
+			continue
+		}
+
 		return fmt.Errorf("unrecognized principal type '%s'", string(principalBytes))
 	}
 
@@ -682,6 +693,8 @@ func (r *RootMetadata) AddControllerRepository(name, location string, initialRoo
 			newKeyIDs = append(newKeyIDs, p)
 		case *Person:
 			// don't need to be checked for duplicates skip
+		case *Team:
+			// don't need to be checked for duplicates skip
 		default:
 			return tuf.ErrInvalidPrincipalType
 		}
@@ -719,6 +732,8 @@ func (r *RootMetadata) AddControllerRepository(name, location string, initialRoo
 			otherRepository.InitialRootPrincipals = append(otherRepository.InitialRootPrincipals, p)
 		case *Person:
 			otherRepository.InitialRootPrincipals = append(otherRepository.InitialRootPrincipals, p)
+		case *Team:
+			otherRepository.InitialRootPrincipals = append(otherRepository.InitialRootPrincipals, p)
 		default:
 			return tuf.ErrInvalidPrincipalType
 		}
@@ -754,6 +769,8 @@ func (r *RootMetadata) AddNetworkRepository(name, location string, initialRootPr
 		case *Key:
 			newKeyIDs = append(newKeyIDs, p)
 		case *Person:
+			// don't need to be checked for duplicates skip
+		case *Team:
 			// don't need to be checked for duplicates skip
 		default:
 			return tuf.ErrInvalidPrincipalType
@@ -791,6 +808,8 @@ func (r *RootMetadata) AddNetworkRepository(name, location string, initialRootPr
 		case *Key:
 			otherRepository.InitialRootPrincipals = append(otherRepository.InitialRootPrincipals, p)
 		case *Person:
+			otherRepository.InitialRootPrincipals = append(otherRepository.InitialRootPrincipals, p)
+		case *Team:
 			otherRepository.InitialRootPrincipals = append(otherRepository.InitialRootPrincipals, p)
 		default:
 			return tuf.ErrInvalidPrincipalType
@@ -830,7 +849,7 @@ func (r *RootMetadata) addPrincipal(principal tuf.Principal) error {
 		r.Principals = map[string]tuf.Principal{}
 	}
 	switch principal := principal.(type) {
-	case *Key, *Person:
+	case *Key, *Person, *Team:
 		r.Principals[principal.ID()] = principal
 	default:
 		return tuf.ErrInvalidPrincipalType
@@ -957,6 +976,17 @@ func (o *OtherRepository) UnmarshalJSON(data []byte) error {
 			}
 
 			o.InitialRootPrincipals = append(o.InitialRootPrincipals, person)
+			continue
+		}
+
+		if _, has := tempPrincipal["teamID"]; has {
+			// this is *Team
+			team := &Team{}
+			if err := json.Unmarshal(principalBytes, team); err != nil {
+				return fmt.Errorf("unable to unmarshal json: %w", err)
+			}
+
+			o.InitialRootPrincipals = append(o.InitialRootPrincipals, team)
 			continue
 		}
 

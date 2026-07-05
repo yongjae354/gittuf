@@ -46,7 +46,7 @@ func (o *options) Run(cmd *cobra.Command, _ []string) error {
 	if o.p.WithRSLEntry {
 		opts = append(opts, trustpolicyopts.WithRSLEntry())
 	}
-	return repo.RemoveTeamFromTargets(cmd.Context(), signer, o.policyName, o.teamID, true, opts...)
+	return repo.RemovePrincipalFromTargets(cmd.Context(), signer, o.policyName, o.teamID, true, opts...)
 }
 
 func New(persistent *persistent.Options) *cobra.Command {

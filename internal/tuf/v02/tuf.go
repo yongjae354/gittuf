@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	"github.com/gittuf/gittuf/internal/common/set"
-	"github.com/gittuf/gittuf/internal/tuf"
 	v01 "github.com/gittuf/gittuf/internal/tuf/v01"
 	"github.com/secure-systems-lab/go-securesystemslib/signerverifier"
 )
@@ -72,20 +71,50 @@ func (p *Person) CustomMetadata() map[string]string {
 	return metadata
 }
 
+// Team defines the structure for how a team identity is stored in policy
+// metadata. It implements tuf.Principal.
 type Team struct {
-	TeamID     string
-	Principals []tuf.Principal
-	Threshold  int
+	// TeamID is a unique name or identifier for a team.
+	TeamID string `json:"teamID"`
+	// MemberIDs stores references to individual persons of a team.
+	MemberIDs []string `json:"memberIDs"`
+	// Threshold defines the minimum number required for a team to reach agreement.
+	Threshold int `json:"threshold"`
+	// Metadata stores custom metadata for a team.
+	Metadata map[string]string `json:"custom"`
 }
 
+// NewTeam constructs a new Team from existing person principal IDs.
+func NewTeam(teamID string, memberIDs []string, threshold int) (*Team, error) {
+	return &Team{
+		TeamID:    teamID,
+		MemberIDs: memberIDs,
+		Threshold: threshold,
+	}, nil
+}
+
+// ID returns the team ID of a team.
 func (t *Team) ID() string {
 	return t.TeamID
 }
 
-func (t *Team) GetPrincipals() []tuf.Principal {
-	return t.Principals
+// Keys returns no keys directly. A team stores only its member IDs, so callers
+// must resolve those IDs against a policy state to retrieve member keys.
+func (t *Team) Keys() []*signerverifier.SSLibKey {
+	return nil
 }
 
+// CustomMetadata returns the custom metadata of a team.
+func (t *Team) CustomMetadata() map[string]string {
+	return t.Metadata
+}
+
+// GetMemberIDs returns the person principal IDs that are members of a team.
+func (t *Team) GetMemberIDs() []string {
+	return t.MemberIDs
+}
+
+// GetThreshold returns the team's internal threshold.
 func (t *Team) GetThreshold() int {
 	return t.Threshold
 }
@@ -94,6 +123,5 @@ func (t *Team) GetThreshold() int {
 // and in a delegation entry.
 type Role struct {
 	PrincipalIDs *set.Set[string] `json:"principalIDs"`
-	TeamIDs      *set.Set[string] `json:"teamIDs"`
 	Threshold    int              `json:"threshold"`
 }

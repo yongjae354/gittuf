@@ -6,6 +6,7 @@ import (
 
 	"github.com/gittuf/gittuf/experimental/gittuf"
 	"github.com/gittuf/gittuf/internal/tuf"
+	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
 	"github.com/spf13/cobra"
 )
 
@@ -42,15 +43,23 @@ func (o *options) Run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	principals, err := repo.ListPrincipals(cmd.Context(), o.policyRef, o.policyName)
+	if err != nil {
+		return err
+	}
 
 	for _, team := range teams {
-		fmt.Printf("Team %s:\n", team.ID())
-		fmt.Printf("Threshold %v:\n", team.GetThreshold())
-		fmt.Printf(indentString + "Principals:\n")
-		for _, principal := range team.GetPrincipals() {
-			fmt.Printf(strings.Repeat(indentString, 2)+"%s: \n", principal.ID())
-			for _, key := range principal.Keys() {
-				fmt.Printf(strings.Repeat(indentString, 2)+"%s (%s)\n", key.KeyID, key.KeyType)
+		fmt.Printf("Team %s (threshold %d):\n", team.ID(), team.GetThreshold())
+
+		if memberIDs := team.GetMemberIDs(); len(memberIDs) > 0 {
+			fmt.Printf("%sMembers:\n", indentString)
+			for _, memberID := range memberIDs {
+				fmt.Printf("%s%s\n", strings.Repeat(indentString, 2), memberID)
+				if member, ok := principals[memberID].(*tufv02.Person); ok {
+					for _, key := range member.Keys() {
+						fmt.Printf("%s%s (%s)\n", strings.Repeat(indentString, 3), key.KeyID, key.KeyType)
+					}
+				}
 			}
 		}
 	}
