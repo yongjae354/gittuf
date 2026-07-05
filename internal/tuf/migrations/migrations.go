@@ -7,7 +7,6 @@ import (
 	"github.com/gittuf/gittuf/internal/tuf"
 	tufv01 "github.com/gittuf/gittuf/internal/tuf/v01"
 	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
-	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
 )
 
 /*
@@ -113,106 +112,6 @@ func MigrateTargetsMetadataV01ToV02(targetsMetadata *tufv01.TargetsMetadata) *tu
 			Custom:      role.Custom,
 			Role: tufv02.Role{
 				PrincipalIDs: role.KeyIDs,
-				Threshold:    role.Threshold,
-			},
-		}
-
-		newTargetsMetadata.Delegations.Roles = append(newTargetsMetadata.Delegations.Roles, newRole)
-	}
-
-	return newTargetsMetadata
-}
-
-// MigrateRootMetadataV02ToV03 converts tufv02.RootMetadata into
-// tufv03.RootMetadata.
-func MigrateRootMetadataV02ToV03(rootMetadata *tufv02.RootMetadata) *tufv03.RootMetadata {
-	newRootMetadata := tufv03.NewRootMetadata()
-
-	// Set same expires
-	newRootMetadata.Expires = rootMetadata.Expires
-
-	// Set same version number
-	newRootMetadata.Version = rootMetadata.Version
-
-	// Set repository location
-	newRootMetadata.RepositoryLocation = rootMetadata.RepositoryLocation
-
-	// Set principals (v02 principals (keys, persons) carry over directly)
-	newRootMetadata.Principals = rootMetadata.Principals
-
-	// Set roles
-	newRootMetadata.Roles = map[string]tufv03.Role{}
-	for roleName, role := range rootMetadata.Roles {
-		newRole := tufv03.Role{
-			PrincipalIDs: role.PrincipalIDs,
-			Threshold:    role.Threshold,
-		}
-		newRootMetadata.Roles[roleName] = newRole
-	}
-
-	// Set app attestations support
-	newRootMetadata.GitHubApps = rootMetadata.GitHubApps
-
-	// Set global rules
-	newRootMetadata.GlobalRules = rootMetadata.GlobalRules
-
-	// Set propagations
-	newRootMetadata.Propagations = rootMetadata.Propagations
-
-	if rootMetadata.MultiRepository != nil {
-		newRootMetadata.MultiRepository = &tufv03.MultiRepository{
-			Controller:             rootMetadata.MultiRepository.Controller,
-			ControllerRepositories: []*tufv03.OtherRepository{},
-			NetworkRepositories:    []*tufv03.OtherRepository{},
-		}
-
-		for _, otherRepository := range rootMetadata.MultiRepository.ControllerRepositories {
-			newRootMetadata.MultiRepository.ControllerRepositories = append(newRootMetadata.MultiRepository.ControllerRepositories, &tufv03.OtherRepository{
-				Name:                  otherRepository.GetName(),
-				Location:              otherRepository.GetLocation(),
-				InitialRootPrincipals: otherRepository.GetInitialRootPrincipals(),
-			})
-		}
-
-		for _, otherRepository := range rootMetadata.MultiRepository.NetworkRepositories {
-			newRootMetadata.MultiRepository.NetworkRepositories = append(newRootMetadata.MultiRepository.NetworkRepositories, &tufv03.OtherRepository{
-				Name:                  otherRepository.GetName(),
-				Location:              otherRepository.GetLocation(),
-				InitialRootPrincipals: otherRepository.GetInitialRootPrincipals(),
-			})
-		}
-	}
-
-	// Set hooks
-	newRootMetadata.Hooks = rootMetadata.Hooks
-
-	return newRootMetadata
-}
-
-// MigrateTargetsMetadataV02ToV03 converts tufv02.TargetsMetadata into
-// tufv03.TargetsMetadata.
-func MigrateTargetsMetadataV02ToV03(targetsMetadata *tufv02.TargetsMetadata) *tufv03.TargetsMetadata {
-	newTargetsMetadata := tufv03.NewTargetsMetadata()
-
-	// Set same expires
-	newTargetsMetadata.Expires = targetsMetadata.Expires
-
-	// Set same version number
-	newTargetsMetadata.Version = targetsMetadata.Version
-
-	// Set delegations (v02 principals (keys, persons) carry over directly)
-	newTargetsMetadata.Delegations = &tufv03.Delegations{
-		Principals: targetsMetadata.Delegations.Principals,
-		Roles:      []*tufv03.Delegation{},
-	}
-	for _, role := range targetsMetadata.Delegations.Roles {
-		newRole := &tufv03.Delegation{
-			Name:        role.Name,
-			Paths:       role.Paths,
-			Terminating: role.Terminating,
-			Custom:      role.Custom,
-			Role: tufv03.Role{
-				PrincipalIDs: role.PrincipalIDs,
 				Threshold:    role.Threshold,
 			},
 		}

@@ -315,6 +315,17 @@ func (d *Delegations) UnmarshalJSON(data []byte) error {
 			continue
 		}
 
+		if _, has := tempPrincipal["teamID"]; has {
+			// this is *Team
+			team := &Team{}
+			if err := json.Unmarshal(principalBytes, team); err != nil {
+				return fmt.Errorf("unable to unmarshal json: %w", err)
+			}
+
+			d.Principals[principalID] = team
+			continue
+		}
+
 		return fmt.Errorf("unrecognized principal type '%s'", string(principalBytes))
 	}
 
@@ -323,15 +334,15 @@ func (d *Delegations) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// addPrincipal adds a delegations key or person.  v02 supports Key and Person
-// as principal types.
+// addPrincipal adds a delegations key, person or team. v02 supports Key,
+// Person, and Team as principal types.
 func (d *Delegations) addPrincipal(principal tuf.Principal) error {
 	if d.Principals == nil {
 		d.Principals = map[string]tuf.Principal{}
 	}
 
 	switch principal := principal.(type) {
-	case *Key, *Person:
+	case *Key, *Person, *Team:
 		d.Principals[principal.ID()] = principal
 	default:
 		return tuf.ErrInvalidPrincipalType
@@ -341,7 +352,7 @@ func (d *Delegations) addPrincipal(principal tuf.Principal) error {
 }
 
 // updatePrincipal updates an existing principal in the metadata. v02 supports
-// Key and Person as principal types.
+// Key, Person, and Team as principal types.
 func (d *Delegations) updatePrincipal(principal tuf.Principal) error {
 	if principal == nil {
 		return tuf.ErrInvalidPrincipalType
@@ -353,7 +364,7 @@ func (d *Delegations) updatePrincipal(principal tuf.Principal) error {
 	}
 
 	switch principal := principal.(type) {
-	case *Key, *Person:
+	case *Key, *Person, *Team:
 		d.Principals[principalID] = principal
 	default:
 		return tuf.ErrInvalidPrincipalType
@@ -362,8 +373,8 @@ func (d *Delegations) updatePrincipal(principal tuf.Principal) error {
 	return nil
 }
 
-// removePrincipal removes a delegations key or person. v02 supports Key and
-// Person as principal types.
+// removePrincipal removes a delegations key, person, or team. v02 supports Key,
+// Person, and Team as principal types.
 func (d *Delegations) removePrincipal(principalID string) error {
 	if d.Principals == nil {
 		return tuf.ErrPrincipalNotFound

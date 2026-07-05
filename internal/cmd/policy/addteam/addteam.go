@@ -9,7 +9,7 @@ import (
 	"github.com/gittuf/gittuf/internal/cmd/policy/persistent"
 	"github.com/gittuf/gittuf/internal/policy"
 	"github.com/gittuf/gittuf/internal/tuf"
-	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
+	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
 	"github.com/spf13/cobra"
 )
 
@@ -82,7 +82,7 @@ func (o *options) Run(cmd *cobra.Command, _ []string) error {
 		members = append(members, principal)
 	}
 
-	team, err := tufv03.NewTeam(o.teamID, members, o.threshold)
+	team, err := tufv02.NewTeam(o.teamID, members, o.threshold)
 	if err != nil {
 		return err
 	}

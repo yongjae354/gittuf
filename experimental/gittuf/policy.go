@@ -14,7 +14,7 @@ import (
 	"github.com/gittuf/gittuf/internal/policy"
 	"github.com/gittuf/gittuf/internal/rsl"
 	"github.com/gittuf/gittuf/internal/tuf"
-	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
+	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
 )
 
 var (
@@ -198,7 +198,7 @@ func (r *Repository) ListPrincipals(ctx context.Context, targetRef, policyName s
 	return metadata.GetPrincipals(), nil
 }
 
-func (r *Repository) ListTeams(ctx context.Context, targetRef, policyName string) (map[string]*tufv03.Team, error) {
+func (r *Repository) ListTeams(ctx context.Context, targetRef, policyName string) (map[string]*tufv02.Team, error) {
 	if !strings.HasPrefix(targetRef, "refs/gittuf/") {
 		targetRef = "refs/gittuf/" + targetRef
 	}
@@ -217,9 +217,9 @@ func (r *Repository) ListTeams(ctx context.Context, targetRef, policyName string
 		return nil, err
 	}
 
-	teams := map[string]*tufv03.Team{}
+	teams := map[string]*tufv02.Team{}
 	for id, principal := range metadata.GetPrincipals() {
-		if team, ok := principal.(*tufv03.Team); ok {
+		if team, ok := principal.(*tufv02.Team); ok {
 			teams[id] = team
 		}
 	}

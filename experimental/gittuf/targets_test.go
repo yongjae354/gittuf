@@ -7,13 +7,11 @@ import (
 	"testing"
 
 	"github.com/gittuf/gittuf/internal/common/set"
-	"github.com/gittuf/gittuf/internal/dev"
 	"github.com/gittuf/gittuf/internal/policy"
 	"github.com/gittuf/gittuf/internal/signerverifier/gpg"
 	"github.com/gittuf/gittuf/internal/tuf"
 	tufv01 "github.com/gittuf/gittuf/internal/tuf/v01"
 	tufv02 "github.com/gittuf/gittuf/internal/tuf/v02"
-	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
 	"github.com/gittuf/gittuf/pkg/gitinterface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -533,9 +531,6 @@ func TestRemovePrincipalFromTargets(t *testing.T) {
 }
 
 func TestAddTeamPrincipalToTargets(t *testing.T) {
-	// Enable developer mode and allow v03 policy for teams.
-	t.Setenv(dev.DevModeKey, "1")
-	t.Setenv(tufv03.AllowV03MetadataKey, "1")
 
 	r := createTestRepositoryWithPolicy(t, "")
 
@@ -548,13 +543,13 @@ func TestAddTeamPrincipalToTargets(t *testing.T) {
 	}
 	gpgKey := tufv01.NewKeyFromSSLibKey(gpgKeyR)
 
-	alice := &tufv03.Person{
+	alice := &tufv02.Person{
 		PersonID:   "alice",
-		PublicKeys: map[string]*tufv03.Key{targetsPubKey.KeyID: targetsPubKey},
+		PublicKeys: map[string]*tufv02.Key{targetsPubKey.KeyID: targetsPubKey},
 	}
-	bob := &tufv03.Person{
+	bob := &tufv02.Person{
 		PersonID:   "bob",
-		PublicKeys: map[string]*tufv03.Key{gpgKey.KeyID: gpgKey},
+		PublicKeys: map[string]*tufv02.Key{gpgKey.KeyID: gpgKey},
 	}
 	authorizedPrincipals := []tuf.Principal{alice, bob}
 
@@ -571,7 +566,7 @@ func TestAddTeamPrincipalToTargets(t *testing.T) {
 	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedPrincipals, false)
 	assert.Nil(t, err)
 
-	team, err := tufv03.NewTeam("team1", authorizedPrincipals, 1)
+	team, err := tufv02.NewTeam("team1", authorizedPrincipals, 1)
 	assert.Nil(t, err)
 	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, []tuf.Principal{team}, false)
 	assert.Nil(t, err)
@@ -596,10 +591,10 @@ func TestAddTeamPrincipalToTargets(t *testing.T) {
 }
 
 // filterTeams returns the subset of principals that are teams, keyed by ID.
-func filterTeams(principals map[string]tuf.Principal) map[string]*tufv03.Team {
-	teams := map[string]*tufv03.Team{}
+func filterTeams(principals map[string]tuf.Principal) map[string]*tufv02.Team {
+	teams := map[string]*tufv02.Team{}
 	for id, principal := range principals {
-		if team, ok := principal.(*tufv03.Team); ok {
+		if team, ok := principal.(*tufv02.Team); ok {
 			teams[id] = team
 		}
 	}
@@ -607,9 +602,6 @@ func filterTeams(principals map[string]tuf.Principal) map[string]*tufv03.Team {
 }
 
 func TestRemoveTeamPrincipalFromTargets(t *testing.T) {
-	// Enable developer mode and allow v03 policy for teams.
-	t.Setenv(dev.DevModeKey, "1")
-	t.Setenv(tufv03.AllowV03MetadataKey, "1")
 
 	r := createTestRepositoryWithPolicy(t, "")
 
@@ -622,13 +614,13 @@ func TestRemoveTeamPrincipalFromTargets(t *testing.T) {
 	}
 	gpgKey := tufv01.NewKeyFromSSLibKey(gpgKeyR)
 
-	alice := &tufv03.Person{
+	alice := &tufv02.Person{
 		PersonID:   "alice",
-		PublicKeys: map[string]*tufv03.Key{targetsPubKey.KeyID: targetsPubKey},
+		PublicKeys: map[string]*tufv02.Key{targetsPubKey.KeyID: targetsPubKey},
 	}
-	bob := &tufv03.Person{
+	bob := &tufv02.Person{
 		PersonID:   "bob",
-		PublicKeys: map[string]*tufv03.Key{gpgKey.KeyID: gpgKey},
+		PublicKeys: map[string]*tufv02.Key{gpgKey.KeyID: gpgKey},
 	}
 	authorizedPrincipals := []tuf.Principal{alice, bob}
 
@@ -645,7 +637,7 @@ func TestRemoveTeamPrincipalFromTargets(t *testing.T) {
 	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedPrincipals, false)
 	assert.Nil(t, err)
 
-	team, err := tufv03.NewTeam("team1", authorizedPrincipals, 1)
+	team, err := tufv02.NewTeam("team1", authorizedPrincipals, 1)
 	assert.Nil(t, err)
 	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, []tuf.Principal{team}, false)
 	assert.Nil(t, err)
@@ -653,7 +645,7 @@ func TestRemoveTeamPrincipalFromTargets(t *testing.T) {
 	err = r.RemovePrincipalFromTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team1", false)
 	assert.Nil(t, err)
 
-	// Removing a team that does not exist is a no-op under the v03 principal
+	// Removing a team that does not exist is a no-op under the principal
 	// removal semantics.
 	err = r.RemovePrincipalFromTargets(testCtx, targetsSigner, policy.TargetsRoleName, "team2", false)
 	assert.Nil(t, err)
@@ -674,9 +666,6 @@ func TestRemoveTeamPrincipalFromTargets(t *testing.T) {
 }
 
 func TestUpdateTeamPrincipalInTargets(t *testing.T) {
-	// Enable developer mode and allow v03 policy for teams.
-	t.Setenv(dev.DevModeKey, "1")
-	t.Setenv(tufv03.AllowV03MetadataKey, "1")
 
 	r := createTestRepositoryWithPolicy(t, "")
 
@@ -689,13 +678,13 @@ func TestUpdateTeamPrincipalInTargets(t *testing.T) {
 	}
 	gpgKey := tufv01.NewKeyFromSSLibKey(gpgKeyR)
 
-	alice := &tufv03.Person{
+	alice := &tufv02.Person{
 		PersonID:   "alice",
-		PublicKeys: map[string]*tufv03.Key{targetsPubKey.KeyID: targetsPubKey},
+		PublicKeys: map[string]*tufv02.Key{targetsPubKey.KeyID: targetsPubKey},
 	}
-	bob := &tufv03.Person{
+	bob := &tufv02.Person{
 		PersonID:   "bob",
-		PublicKeys: map[string]*tufv03.Key{gpgKey.KeyID: gpgKey},
+		PublicKeys: map[string]*tufv02.Key{gpgKey.KeyID: gpgKey},
 	}
 	authorizedPrincipals := []tuf.Principal{alice, bob}
 
@@ -712,19 +701,19 @@ func TestUpdateTeamPrincipalInTargets(t *testing.T) {
 	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, authorizedPrincipals, false)
 	assert.Nil(t, err)
 
-	team, err := tufv03.NewTeam("team1", nil, 1)
+	team, err := tufv02.NewTeam("team1", nil, 1)
 	assert.Nil(t, err)
 	err = r.AddPrincipalToTargets(testCtx, targetsSigner, policy.TargetsRoleName, []tuf.Principal{team}, false)
 	assert.Nil(t, err)
 
 	// Update threshold of team1
-	team, err = tufv03.NewTeam("team1", authorizedPrincipals, 2)
+	team, err = tufv02.NewTeam("team1", authorizedPrincipals, 2)
 	assert.Nil(t, err)
 	err = r.UpdatePrincipalInTargets(testCtx, targetsSigner, policy.TargetsRoleName, team, false)
 	assert.Nil(t, err)
 
 	// Updating a team that does not exist fails with ErrPrincipalNotFound
-	team, err = tufv03.NewTeam("team2", authorizedPrincipals, 2)
+	team, err = tufv02.NewTeam("team2", authorizedPrincipals, 2)
 	assert.Nil(t, err)
 	err = r.UpdatePrincipalInTargets(testCtx, targetsSigner, policy.TargetsRoleName, team, false)
 	assert.NotNil(t, err)

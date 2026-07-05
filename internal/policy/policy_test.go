@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/gittuf/gittuf/internal/common/set"
-	"github.com/gittuf/gittuf/internal/dev"
 	policyopts "github.com/gittuf/gittuf/internal/policy/options/policy"
 	"github.com/gittuf/gittuf/internal/rsl"
 	"github.com/gittuf/gittuf/internal/signerverifier/dsse"
@@ -19,7 +18,6 @@ import (
 	"github.com/gittuf/gittuf/internal/signerverifier/ssh"
 	"github.com/gittuf/gittuf/internal/tuf"
 	tufv01 "github.com/gittuf/gittuf/internal/tuf/v01"
-	tufv03 "github.com/gittuf/gittuf/internal/tuf/v03"
 	"github.com/gittuf/gittuf/pkg/gitinterface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -895,43 +893,6 @@ func TestStateGetTargetsMetadata(t *testing.T) {
 
 		_, err = state.GetTargetsMetadata(TargetsRoleName, false)
 		assert.Nil(t, err)
-	})
-}
-
-func TestStateGetV03MetadataWithoutGate(t *testing.T) {
-	t.Setenv(dev.DevModeKey, "0")
-	t.Setenv(tufv03.AllowV03MetadataKey, "0")
-
-	t.Run("root", func(t *testing.T) {
-		rootMetadata := tufv03.NewRootMetadata()
-		rootEnv, err := dsse.CreateEnvelope(rootMetadata)
-		require.Nil(t, err)
-
-		state := &State{
-			Metadata: &StateMetadata{
-				RootEnvelope: rootEnv,
-			},
-		}
-
-		loadedRootMetadata, err := state.GetRootMetadata(false)
-		require.Nil(t, err)
-		assert.IsType(t, &tufv03.RootMetadata{}, loadedRootMetadata)
-	})
-
-	t.Run("targets", func(t *testing.T) {
-		targetsMetadata := tufv03.NewTargetsMetadata()
-		targetsEnv, err := dsse.CreateEnvelope(targetsMetadata)
-		require.Nil(t, err)
-
-		state := &State{
-			Metadata: &StateMetadata{
-				TargetsEnvelope: targetsEnv,
-			},
-		}
-
-		loadedTargetsMetadata, err := state.GetTargetsMetadata(TargetsRoleName, false)
-		require.Nil(t, err)
-		assert.IsType(t, &tufv03.TargetsMetadata{}, loadedTargetsMetadata)
 	})
 }
 
